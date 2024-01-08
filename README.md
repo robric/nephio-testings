@@ -14,7 +14,14 @@ Create an UBUNTU VM with the requirements - that's very straightforward with mul
 ```
 multipass launch --name ubuntu-vm --mem 32G --disk 200G --cpus 8 focal
 ```
-
+Installation as per tutorial. This just works.
+```
+wget -O - https://raw.githubusercontent.com/nephio-project/test-infra/v1.0.1/e2e/provision/init.sh |  \
+sudo NEPHIO_DEBUG=false   \
+     NEPHIO_BRANCH=v1.0.1 \
+     NEPHIO_USER=ubuntu   \
+     bash
+```
 ## 
 
 
