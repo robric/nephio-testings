@@ -165,9 +165,31 @@ workloadclusters.infra.nephio.org                            2024-01-08T18:48:34
 ubuntu@ubuntu-vm:~$ 
 ```
 
-## First look
+The setup is based on kind so we can have multiple clusters. At first there is a single node (control plane).
 
-For more information: [official link](https://github.com/nephio-project/docs/blob/main/user-guide/exercises.md)
+```
+ubuntu@ubuntu-vm:~$ kind get nodes
+kind-control-plane
+ubuntu@ubuntu-vm:~$
+
+ubuntu@ubuntu-vm:~$ kubectl get nodes
+NAME                 STATUS   ROLES           AGE   VERSION
+kind-control-plane   Ready    control-plane   22h   v1.27.1
+
+ubuntu@ubuntu-vm:~$ kubectl get clusters
+No resources found in default namespace.
+ubuntu@ubuntu-vm:~$
+```
+
+## First time use
+
+Again this is taken from: [official link](https://github.com/nephio-project/docs/blob/main/user-guide/exercises.md)
+
+The idea to have multiple clusters with 
+- 1 regional cluster
+- 2 edge clusters
+
+
 There are few packages already installed.
 
 ```
@@ -177,7 +199,50 @@ free5gc-packages          git    Package   false        True    https://github.c
 mgmt                      git    Package   true         True    http://172.18.0.200:3000/nephio/mgmt.git
 mgmt-staging              git    Package   false        True    http://172.18.0.200:3000/nephio/mgmt-staging.git
 nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
+
+This is actually the same output as the one that gets kpt repos
+
+ubuntu@ubuntu-vm:~$ kpt  alpha repo  get
+NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
+free5gc-packages          git    Package   false        True    https://github.com/nephio-project/free5gc-packages.git
+mgmt                      git    Package   true         True    http://172.18.0.200:3000/nephio/mgmt.git
+mgmt-staging              git    Package   false        True    http://172.18.0.200:3000/nephio/mgmt-staging.git
+nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
+
 ```
 
- 
+We're having tons of packages there...  These are remote packages (see rpkg in the command) for now that we want to clone locally (gitea).
 
+```
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg get
+NAME                                                               PACKAGE                              WORKSPACENAME   REVISION   LATEST   LIFECYCLE   REPOSITORY
+free5gc-packages-148a8446856cfcba9ba53f9c5786bacb835f3733          free5gc-cp                           main            main       false    Published   free5gc-packages
+free5gc-packages-daba5a241a23af3ce777b256c39dcedc3c5e3917          free5gc-cp                           v1              v1         true     Published   free5gc-packages
+free5gc-packages-0173ec955eeb21c2bebdf53699d969295bbd17a6          free5gc-operator                     main            main       false    Published   free5gc-packages
+free5gc-packages-9f723b4dd4dd0d1078da499ab71f11f54b6f4bea          free5gc-operator                     v1              v1         false    Published   free5gc-packages
+[...]
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg get --name nephio-workload-cluster
+NAME                                                               PACKAGE                   WORKSPACENAME   REVISION   LATEST   LIFECYCLE   REPOSITORY
+nephio-example-packages-05707c7acfb59988daaefd85e3f5c299504c2da1   nephio-workload-cluster   main            main       false    Published   nephio-example-packages
+[...]
+nephio-example-packages-48cea934a3bd876b775099ab59e7c12456888ffd   nephio-workload-cluster   v9              v9         true     Published   nephio-example-packages
+...
+```
+
+So we clone the remote package 
+```
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg clone -n default nephio-example-packages-48cea934a3bd876b775099ab59e7c12456888ffd --repository mgmt regional
+mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 created
+ubuntu@ubuntu-vm:~$
+```
+
+And we get a new cloned directory  of the remote package.
+
+```
+ubuntu@ubuntu-vm:~$ ls
+nephio.yaml  regional  test-infra
+ubuntu@ubuntu-vm:~$ cd regional/
+ubuntu@ubuntu-vm:~/regional$ ls
+Kptfile    apply-replacements.yaml  pv-cluster.yaml     pv-kindnet.yaml                 pv-multus.yaml  pv-rootsync.yaml   workload-cluster.yaml
+README.md  package-context.yaml     pv-configsync.yaml  pv-local-path-provisioner.yaml  pv-repo.yaml    pv-vlanindex.yaml
+```
