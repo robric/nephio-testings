@@ -26,7 +26,7 @@ Add port redirection to access UI for nephio and gitea:
 ```
 ssh ubuntu@10.65.94.183               -L *:7007:localhost:7007                 -L *:3000:172.18.0.200:3000                 kubectl port-forward --namespace=nephio-webui svc/nephio-webui 7007
 ```
-For some reason, this does not work for nephio UI - this is ok for gitea.
+For some reason, the nephio UI does not work. This is ok for gitea.
 
 ## What you get from there
 
@@ -86,13 +86,98 @@ porch-system                        function-runner-7c5766c7d6-pxf9z            
 porch-system                        porch-controllers-c694cd64d-nv7qb                               1/1     Running   0             15h
 porch-system                        porch-server-6b5f89996b-wjhmm                                   1/1     Running   9 (97m ago)   15h
 resource-group-system               resource-group-controller-manager-6c9d56d88-6n7ns               3/3     Running   0             15h
-```
 
+And we have plenty of CRDs to manage the different softwares components:
+
+ubuntu@ubuntu-vm:~$ kubectl get crds
+NAME                                                         CREATED AT
+addresspools.metallb.io                                      2024-01-08T18:45:17Z
+amfdeployments.workload.nephio.org                           2024-01-08T18:48:33Z
+bfdprofiles.metallb.io                                       2024-01-08T18:45:17Z
+bgpadvertisements.metallb.io                                 2024-01-08T18:45:17Z
+bgppeers.metallb.io                                          2024-01-08T18:45:17Z
+capacities.req.nephio.org                                    2024-01-08T18:48:33Z
+certificaterequests.cert-manager.io                          2024-01-08T18:45:12Z
+certificates.cert-manager.io                                 2024-01-08T18:45:12Z
+challenges.acme.cert-manager.io                              2024-01-08T18:45:12Z
+clusterclasses.cluster.x-k8s.io                              2024-01-08T18:46:25Z
+clustercontexts.infra.nephio.org                             2024-01-08T18:48:33Z
+clusterissuers.cert-manager.io                               2024-01-08T18:45:12Z
+clusterresourcesetbindings.addons.cluster.x-k8s.io           2024-01-08T18:46:25Z
+clusterresourcesets.addons.cluster.x-k8s.io                  2024-01-08T18:46:25Z
+clusters.cluster.x-k8s.io                                    2024-01-08T18:46:25Z
+clusters.clusterregistry.k8s.io                              2024-01-08T18:49:05Z
+clusterselectors.configmanagement.gke.io                     2024-01-08T18:49:05Z
+communities.metallb.io                                       2024-01-08T18:45:17Z
+configmanagements.configmanagement.gke.io                    2024-01-08T18:48:54Z
+datanetworknames.req.nephio.org                              2024-01-08T18:48:33Z
+datanetworks.req.nephio.org                                  2024-01-08T18:48:34Z
+dockerclusters.infrastructure.cluster.x-k8s.io               2024-01-08T18:46:44Z
+dockerclustertemplates.infrastructure.cluster.x-k8s.io       2024-01-08T18:46:44Z
+dockermachinepools.infrastructure.cluster.x-k8s.io           2024-01-08T18:46:45Z
+dockermachines.infrastructure.cluster.x-k8s.io               2024-01-08T18:46:45Z
+dockermachinetemplates.infrastructure.cluster.x-k8s.io       2024-01-08T18:46:45Z
+endpoints.inv.nephio.org                                     2024-01-08T18:45:11Z
+extensionconfigs.runtime.cluster.x-k8s.io                    2024-01-08T18:46:25Z
+hierarchyconfigs.configmanagement.gke.io                     2024-01-08T18:49:05Z
+interfaces.req.nephio.org                                    2024-01-08T18:48:34Z
+ipaddressclaims.ipam.cluster.x-k8s.io                        2024-01-08T18:46:25Z
+ipaddresses.ipam.cluster.x-k8s.io                            2024-01-08T18:46:25Z
+ipaddresspools.metallb.io                                    2024-01-08T18:45:17Z
+ipclaims.ipam.resource.nephio.org                            2024-01-08T18:45:11Z
+ipprefixes.ipam.resource.nephio.org                          2024-01-08T18:45:11Z
+issuers.cert-manager.io                                      2024-01-08T18:45:12Z
+kubeadmconfigs.bootstrap.cluster.x-k8s.io                    2024-01-08T18:46:25Z
+kubeadmconfigtemplates.bootstrap.cluster.x-k8s.io            2024-01-08T18:46:25Z
+kubeadmcontrolplanes.controlplane.cluster.x-k8s.io           2024-01-08T18:46:25Z
+kubeadmcontrolplanetemplates.controlplane.cluster.x-k8s.io   2024-01-08T18:46:26Z
+l2advertisements.metallb.io                                  2024-01-08T18:45:17Z
+links.inv.nephio.org                                         2024-01-08T18:45:11Z
+machinedeployments.cluster.x-k8s.io                          2024-01-08T18:46:26Z
+machinehealthchecks.cluster.x-k8s.io                         2024-01-08T18:46:26Z
+machinepools.cluster.x-k8s.io                                2024-01-08T18:46:26Z
+machines.cluster.x-k8s.io                                    2024-01-08T18:46:26Z
+machinesets.cluster.x-k8s.io                                 2024-01-08T18:46:26Z
+namespaceselectors.configmanagement.gke.io                   2024-01-08T18:49:05Z
+networkconfigs.infra.nephio.org                              2024-01-08T18:48:34Z
+networkinstances.ipam.resource.nephio.org                    2024-01-08T18:45:12Z
+networks.config.nephio.org                                   2024-01-08T18:48:34Z
+networks.infra.nephio.org                                    2024-01-08T18:48:34Z
+nodes.inv.nephio.org                                         2024-01-08T18:45:12Z
+orders.acme.cert-manager.io                                  2024-01-08T18:45:12Z
+packagerevs.config.porch.kpt.dev                             2024-01-08T18:47:16Z
+packagevariants.config.porch.kpt.dev                         2024-01-08T18:47:16Z
+packagevariantsets.config.porch.kpt.dev                      2024-01-08T18:47:16Z
+rawtopologies.topo.nephio.org                                2024-01-08T18:45:12Z
+repositories.config.porch.kpt.dev                            2024-01-08T18:47:16Z
+repositories.infra.nephio.org                                2024-01-08T18:48:34Z
+reposyncs.configsync.gke.io                                  2024-01-08T18:49:05Z
+resourcegroups.kpt.dev                                       2024-01-08T18:45:01Z
+rootsyncs.configsync.gke.io                                  2024-01-08T18:48:54Z
+smfdeployments.workload.nephio.org                           2024-01-08T18:48:34Z
+targets.inv.nephio.org                                       2024-01-08T18:45:12Z
+tokens.infra.nephio.org                                      2024-01-08T18:48:34Z
+upfdeployments.workload.nephio.org                           2024-01-08T18:48:34Z
+vlanclaims.vlan.resource.nephio.org                          2024-01-08T18:45:12Z
+vlanindices.vlan.resource.nephio.org                         2024-01-08T18:45:12Z
+vlans.vlan.resource.nephio.org                               2024-01-08T18:45:12Z
+workloadclusters.infra.nephio.org                            2024-01-08T18:48:34Z
+ubuntu@ubuntu-vm:~$ 
+```
 
 ## First look
 
-[official link](https://github.com/nephio-project/docs/blob/main/user-guide/exercises.md)
+For more information: [official link](https://github.com/nephio-project/docs/blob/main/user-guide/exercises.md)
+There are few packages already installed.
 
+```
+ubuntu@ubuntu-vm:~$ kubectl get repositories.config.porch.kpt.dev
+NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
+free5gc-packages          git    Package   false        True    https://github.com/nephio-project/free5gc-packages.git
+mgmt                      git    Package   true         True    http://172.18.0.200:3000/nephio/mgmt.git
+mgmt-staging              git    Package   false        True    http://172.18.0.200:3000/nephio/mgmt-staging.git
+nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
+```
 
  
 
