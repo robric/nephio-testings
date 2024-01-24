@@ -189,6 +189,8 @@ ubuntu@ubuntu-vm:~$
 
 ## First time use
 
+### get packages (regional) via kpt
+
 Again this is taken from: [official link](https://github.com/nephio-project/docs/blob/main/user-guide/exercises.md)
 
 The idea to have multiple clusters with 
@@ -314,8 +316,8 @@ ubuntu@ubuntu-vm:~$ kpt alpha rpkg propose -n default mgmt-08c26219f9879acdefed3
 mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 proposed
 ubuntu@ubuntu-vm:~$ 
 ```
-Approve the package. 
-/*This is starting the deployment.*/
+### deploy regional (via kpt)
+Just approve the package, this starts the deployment (kind node creation etc.) 
 ```
 ubuntu@ubuntu-vm:~$ kpt alpha rpkg approve -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868
 mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 approved
