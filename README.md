@@ -316,7 +316,7 @@ ubuntu@ubuntu-vm:~$ kpt alpha rpkg propose -n default mgmt-08c26219f9879acdefed3
 mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 proposed
 ubuntu@ubuntu-vm:~$ 
 ```
-### deploy regional (via kpt)
+### deploy the regional cluster (via kpt)
 Just approve the package, this starts the deployment (kind node creation etc.) 
 ```
 ubuntu@ubuntu-vm:~$ kpt alpha rpkg approve -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868
