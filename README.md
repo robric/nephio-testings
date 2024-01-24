@@ -14,6 +14,12 @@ Create an UBUNTU VM with the requirements - that's very straightforward with mul
 ```
 multipass launch --name ubuntu-vm --mem 32G --disk 200G --cpus 8 focal
 ```
+```
+root@fiveg-host-24-node4:~# multipass list
+Name                    State             IPv4             Image
+ubuntu-vm               Running           10.65.94.183     Ubuntu 20.04 LTS
+```
+
 Installation as per tutorial. This just works.
 ```
 wget -O - https://raw.githubusercontent.com/nephio-project/test-infra/v1.0.1/e2e/provision/init.sh |  \
@@ -234,15 +240,240 @@ So we clone the remote package
 ubuntu@ubuntu-vm:~$ kpt alpha rpkg clone -n default nephio-example-packages-48cea934a3bd876b775099ab59e7c12456888ffd --repository mgmt regional
 mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 created
 ubuntu@ubuntu-vm:~$
+
+kpt alpha rpkg pull -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 regional
 ```
 
-And we get a new cloned directory  of the remote package.
+And we get a new cloned directory of the remote package.
 
 ```
 ubuntu@ubuntu-vm:~$ ls
 nephio.yaml  regional  test-infra
 ubuntu@ubuntu-vm:~$ cd regional/
-ubuntu@ubuntu-vm:~/regional$ ls
-Kptfile    apply-replacements.yaml  pv-cluster.yaml     pv-kindnet.yaml                 pv-multus.yaml  pv-rootsync.yaml   workload-cluster.yaml
-README.md  package-context.yaml     pv-configsync.yaml  pv-local-path-provisioner.yaml  pv-repo.yaml    pv-vlanindex.yaml
+ubuntu@ubuntu-vm:~/regional$ ls -l
+total 52
+-rw-r--r-- 1 ubuntu ubuntu 880 Jan  9 10:10 Kptfile
+-rw-r--r-- 1 ubuntu ubuntu 782 Jan  9 10:10 README.md
+-rw-r--r-- 1 ubuntu ubuntu 848 Jan  9 10:10 apply-replacements.yaml
+-rw-r--r-- 1 ubuntu ubuntu 283 Jan  9 10:10 package-context.yaml
+-rw-r--r-- 1 ubuntu ubuntu 654 Jan  9 10:10 pv-cluster.yaml
+-rw-r--r-- 1 ubuntu ubuntu 609 Jan  9 10:10 pv-configsync.yaml
+-rw-r--r-- 1 ubuntu ubuntu 594 Jan  9 10:10 pv-kindnet.yaml
+-rw-r--r-- 1 ubuntu ubuntu 669 Jan  9 10:10 pv-local-path-provisioner.yaml
+-rw-r--r-- 1 ubuntu ubuntu 589 Jan  9 10:10 pv-multus.yaml
+-rw-r--r-- 1 ubuntu ubuntu 635 Jan  9 10:10 pv-repo.yaml
+-rw-r--r-- 1 ubuntu ubuntu 657 Jan  9 10:10 pv-rootsync.yaml
+-rw-r--r-- 1 ubuntu ubuntu 654 Jan  9 10:10 pv-vlanindex.yaml
+-rw-r--r-- 1 ubuntu ubuntu 405 Jan  9 10:10 workload-cluster.yaml
+ubuntu@ubuntu-vm:~/regional$
+
+ubuntu@ubuntu-vm:~/regional$ cat README.md 
+# nephio-workload-cluster
+
+## Description
+
+Deploying this package to the Nephio management cluster will result in the
+provisioning of a workload cluster, associated repository, tokens, secrets,
+and other resources needed to fully register the new cluster with Nephio.
 ```
+
+Use the set-label function against the package.
+```
+ubuntu@ubuntu-vm:~$ kpt fn eval --image gcr.io/kpt-fn/set-labels:v0.2.0 regional -- "nephio.org/site-type=regional" "nephio.org/region=us-west1"
+[RUNNING] "gcr.io/kpt-fn/set-labels:v0.2.0"
+[PASS] "gcr.io/kpt-fn/set-labels:v0.2.0" in 2.3s
+  Results:
+    [info]: set 18 labels in total
+ubuntu@ubuntu-vm:~$
+```
+This kpt fn eval launches a docker "gcr.io/kpt-fn/set-labels"
+```
+ubuntu@ubuntu-vm:~/regional$ docker image ls
+REPOSITORY                 TAG       IMAGE ID       CREATED         SIZE
+...
+gcr.io/kpt-fn/set-labels   v0.2.0    85f5cf1ba0f4   15 months ago   20.5MB
+``` 
+Now if we look at any of the files in the /regional folder, they have the new labels  "nephio.org/site-type=regional" "nephio.org/region=us-west1"
+```
+ubuntu@ubuntu-vm:~/regional$ cat workload-cluster.yaml 
+apiVersion: infra.nephio.org/v1alpha1
+kind: WorkloadCluster
+metadata: # kpt-merge: /example
+  name: regional
+  annotations:
+    internal.kpt.dev/upstream-identifier: 'infra.nephio.org|WorkloadCluster|default|example'
+  labels:
+    nephio.org/region: us-west1
+    nephio.org/site-type: regional
+[...]
+ubuntu@ubuntu-vm:~/regional$
+```
+Propose the package for being published
+```
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg propose -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868
+mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 proposed
+ubuntu@ubuntu-vm:~$ 
+```
+Approve the package. 
+/*This is starting the deployment.*/
+```
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg approve -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868
+mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 approved
+ubuntu@ubuntu-vm:~$ 
+```
+After some time we can see a new 'regional' kind cluster created with a set of nodes. 
+```
+ubuntu@ubuntu-vm:~$ kind get clusters
+kind
+regional
+
+ubuntu@ubuntu-vm:~$ kind get nodes -n regional
+regional-md-0-72czx-79d7f67568xds4wb-m96hq
+regional-v6gkt-br7nq
+regional-lb
+ubuntu@ubuntu-vm:~$
+
+A ressource cluster is created.
+
+ubuntu@ubuntu-vm:~$ kubectl get clusters.cluster.x-k8s.io 
+NAME       PHASE         AGE   VERSION
+regional   Provisioned   13m   v1.26.3
+ubuntu@ubuntu-vm:~$
+
+### The deployment is tracked in "machine" CRDs. This maps with kind nodes (fortunately :-) )
+
+ubuntu@ubuntu-vm:~$ kubectl get machinedeployments.cluster.x-k8s.io 
+NAME                  CLUSTER    REPLICAS   READY   UPDATED   UNAVAILABLE   PHASE     AGE   VERSION
+regional-md-0-72czx   regional   1          1       1         0             Running   33m   v1.26.3
+
+ubuntu@ubuntu-vm:~$ kubectl get machinesets.cluster.x-k8s.io 
+NAME                                   CLUSTER    REPLICAS   READY   AVAILABLE   AGE   VERSION
+regional-md-0-72czx-79d7f67568xds4wb   regional   1          1       1           32m   v1.26.3
+
+ubuntu@ubuntu-vm:~$ kubectl get machines
+NAME                                         CLUSTER    NODENAME                                     PROVIDERID                                              PHASE     AGE   VERSION
+regional-md-0-72czx-79d7f67568xds4wb-m96hq   regional   regional-md-0-72czx-79d7f67568xds4wb-m96hq   docker:////regional-md-0-72czx-79d7f67568xds4wb-m96hq   Running   33m   v1.26.3
+regional-v6gkt-br7nq                         regional   regional-v6gkt-br7nq                         docker:////regional-v6gkt-br7nq                         Running   32m   v1.26.3       
+
+ubuntu@ubuntu-vm:~$ 
+```
+Access the nested cluster via kubectl.
+```
+ubuntu@ubuntu-vm:~$ kubectl get secret regional-kubeconfig -o jsonpath='{.data.value}' | base64 -d > $HOME/.kube/regional-kubeconfig
+ubuntu@ubuntu-vm:~$ export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/regional-kubeconfig
+
+ubuntu@ubuntu-vm:~$ kubectl config get-contexts 
+CURRENT   NAME                      CLUSTER     AUTHINFO         NAMESPACE
+*         kind-kind                 kind-kind   kind-kind        
+          regional-admin@regional   regional    regional-admin   
+ubuntu@ubuntu-vm:~$
+ubuntu@ubuntu-vm:~$ kubectl config use-context regional-admin@regional 
+Switched to context "regional-admin@regional".
+
+ubuntu@ubuntu-vm:~$ kubectl get ns
+NAME                           STATUS   AGE
+config-management-monitoring   Active   27m
+config-management-system       Active   27m
+default                        Active   27m
+kube-node-lease                Active   27m
+kube-public                    Active   27m
+kube-system                    Active   27m
+local-path-storage             Active   27m
+resource-group-system          Active   26m
+ubuntu@ubuntu-vm:~$
+
+ubuntu@ubuntu-vm:~$ kubectl get nodes
+NAME                                         STATUS   ROLES           AGE   VERSION
+regional-md-0-72czx-79d7f67568xds4wb-m96hq   Ready    <none>          25m   v1.26.3
+regional-v6gkt-br7nq                         Ready    control-plane   26m   v1.26.3
+ubuntu@ubuntu-vm:~$
+
+ubuntu@ubuntu-vm:~$ kubectl get pods -A
+NAMESPACE                      NAME                                                 READY   STATUS    RESTARTS   AGE
+config-management-monitoring   otel-collector-859586c54-gj5fm                       1/1     Running   0          24m
+config-management-system       config-management-operator-684584c5df-crgl8          1/1     Running   0          25m
+config-management-system       reconciler-manager-86c5f8cc79-7swvd                  2/2     Running   0          24m
+config-management-system       root-reconciler-regional-55dd9c795b-zw9np            4/4     Running   0          24m
+kube-system                    coredns-787d4945fb-bz6sk                             1/1     Running   0          25m
+kube-system                    coredns-787d4945fb-szpnd                             1/1     Running   0          25m
+kube-system                    etcd-regional-v6gkt-br7nq                            1/1     Running   0          25m
+kube-system                    kindnet-96qp7                                        1/1     Running   0          25m
+kube-system                    kindnet-g7jkl                                        1/1     Running   0          25m
+kube-system                    kube-apiserver-regional-v6gkt-br7nq                  1/1     Running   0          25m
+kube-system                    kube-controller-manager-regional-v6gkt-br7nq         1/1     Running   0          25m
+kube-system                    kube-multus-ds-9ttqz                                 1/1     Running   0          25m
+kube-system                    kube-multus-ds-thtrx                                 1/1     Running   0          25m
+kube-system                    kube-proxy-czz58                                     1/1     Running   0          25m
+kube-system                    kube-proxy-rf5qs                                     1/1     Running   0          25m
+kube-system                    kube-scheduler-regional-v6gkt-br7nq                  1/1     Running   0          25m
+local-path-storage             local-path-provisioner-5d76447cf7-jpbl8              1/1     Running   0          25m
+resource-group-system          resource-group-controller-manager-6cdfc6486d-hrj77   3/3     Running   0          24m
+
+```
+
+Deploy Edge Clusters
+
+```
+Apply the a new package (
+
+ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/002-edge-clusters.yaml
+packagevariantset.config.porch.kpt.dev/edge-clusters unchanged
+ubuntu@ubuntu-vm:~$
+
+### it seems to be equivalent to the kpt commands previously seen but in manifests. Here is the content of the file.
+
+ubuntu@ubuntu-vm:~$ cat test-infra/e2e/tests/002-edge-clusters.yaml 
+apiVersion: config.porch.kpt.dev/v1alpha2
+kind: PackageVariantSet
+metadata:
+  name: edge-clusters
+spec:
+  upstream:
+    repo: nephio-example-packages
+    package: nephio-workload-cluster
+    revision: v9
+  targets:
+  - repositories:
+    - name: mgmt
+      packageNames:
+      - edge01
+      - edge02
+    template:
+      annotations:
+        approval.nephio.org/policy: initial
+      pipeline:
+        mutators:
+        - image: gcr.io/kpt-fn/set-labels:v0.2.0
+          configMap:
+            nephio.org/site-type: edge
+            nephio.org/region: us-west1
+
+### We see new repos for edge
+
+ubuntu@ubuntu-vm:~$ kubectl get repositories.
+NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
+edge01                    git    Package   true         True    http://172.18.0.200:3000/nephio/edge01.git
+edge02                    git    Package   true         True    http://172.18.0.200:3000/nephio/edge02.git
+free5gc-packages          git    Package   false        True    https://github.com/nephio-project/free5gc-packages.git
+mgmt                      git    Package   true         True    http://172.18.0.200:3000/nephio/mgmt.git
+mgmt-staging              git    Package   false        True    http://172.18.0.200:3000/nephio/mgmt-staging.git
+nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
+regional                  git    Package   true         True    http://172.18.0.200:3000/nephio/regional.git
+ubuntu@ubuntu-vm:~$
+
+### After some time new clusters are created...
+
+ubuntu@ubuntu-vm:~$ kind get clusters
+edge01
+edge02
+kind
+regional
+
+ubuntu@ubuntu-vm:~$ kubectl get machinesets.cluster.x-k8s.io 
+NAME                                   CLUSTER    REPLICAS   READY   AVAILABLE   AGE    VERSION
+edge01-md-0-5cz45-64b9665598x9b9q9     edge01     1          1       1           2m4s   v1.26.3
+edge02-md-0-sq944-54f5949dd4xgkjcf     edge02     1          1       1           75s    v1.26.3
+regional-md-0-72czx-79d7f67568xds4wb   regional   1          1       1           46m    v1.26.3
+ubuntu@ubuntu-vm:~$
+``` 
+
