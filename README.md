@@ -335,7 +335,7 @@ regional-v6gkt-br7nq
 regional-lb
 ubuntu@ubuntu-vm:~$
 
-A ressource cluster is created.
+### A  cluster ressource is created.
 
 ubuntu@ubuntu-vm:~$ kubectl get clusters.cluster.x-k8s.io 
 NAME       PHASE         AGE   VERSION
@@ -413,16 +413,13 @@ resource-group-system          resource-group-controller-manager-6cdfc6486d-hrj7
 
 ```
 
-Deploy Edge Clusters
+### Deploy Edge Clusters
 
 ```
-Apply the a new package (
+### Apply package (porch) via kubernetes. Tt seems to be equivalent to the kpt commands previously seen but in manifests. The content of the file is below.
 
 ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/002-edge-clusters.yaml
 packagevariantset.config.porch.kpt.dev/edge-clusters unchanged
-ubuntu@ubuntu-vm:~$
-
-### it seems to be equivalent to the kpt commands previously seen but in manifests. Here is the content of the file.
 
 ubuntu@ubuntu-vm:~$ cat test-infra/e2e/tests/002-edge-clusters.yaml 
 apiVersion: config.porch.kpt.dev/v1alpha2
@@ -477,5 +474,79 @@ edge01-md-0-5cz45-64b9665598x9b9q9     edge01     1          1       1          
 edge02-md-0-sq944-54f5949dd4xgkjcf     edge02     1          1       1           75s    v1.26.3
 regional-md-0-72czx-79d7f67568xds4wb   regional   1          1       1           46m    v1.26.3
 ubuntu@ubuntu-vm:~$
-``` 
+```
 
+Same as previously, we add the edge kubeconfig files for the new clusters and we make sure to have this permanent via .bashrc. 
+That allows us to enter any cluster: regional, edge01 and edge 02.
+
+```
+kubectl get secret edge01-kubeconfig -o jsonpath='{.data.value}' | base64 -d > $HOME/.kube/edge01-kubeconfig
+kubectl get secret edge02-kubeconfig -o jsonpath='{.data.value}' | base64 -d > $HOME/.kube/edge02-kubeconfig
+export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/regional-kubeconfig:$HOME/.kube/edge01-kubeconfig:$HOME/.kube/edge02-kubeconfig
+echo "export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/regional-kubeconfig:$HOME/.kube/edge01-kubeconfig:$HOME/.kube/edge02-kubeconfig" >> ~/.bashrc
+```
+Then configure networking to interconnect regional and edges via 3 vlans (2,3,4). No IP address is defined here, since this will be pushed via nephio.
+```
+./test-infra/e2e/provision/hacks/inter-connect_workers.sh
+./test-infra/e2e/provision/hacks/vlan-interfaces.sh
+```
+Network is managed by containerlab (a new config folder ~/clab-free5gc-net is created). Next, new vlans are created in each of the kind nodes.
+```
+ubuntu@ubuntu-vm:~$ docker exec -it edge01-md-0-5cz45-64b9665598x9b9q9-8gcp4  ip link
+[...]
+8: eth1.2@eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether aa:c1:ab:c4:73:75 brd ff:ff:ff:ff:ff:ff
+9: eth1.3@eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether aa:c1:ab:c4:73:75 brd ff:ff:ff:ff:ff:ff
+10: eth1.4@eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether aa:c1:ab:c4:73:75 brd ff:ff:ff:ff:ff:ff
+```
+Configure routing backend via nephio via package. Things start to become interesting here.
+```
+kubectl apply -f test-infra/e2e/tests/003-network.yaml
+```
+Let's have a closer look !
+```
+### A resource "packagevariant" is created from repo "nephio-example-packages" using package "network"
+
+ubuntu@ubuntu-vm:~$ cat test-infra/e2e/tests/003-network.yaml
+apiVersion: config.porch.kpt.dev/v1alpha1
+kind: PackageVariant
+metadata:
+  name: network
+spec:
+  upstream:
+    repo: nephio-example-packages
+    package: network
+    revision: v1
+  downstream:
+    repo: mgmt
+    package: network
+  annotations:
+    approval.nephio.org/policy: initial
+
+### We can quickly find the git source !
+
+ubuntu@ubuntu-vm:~$ kubectl get repositories.
+NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
+[...]
+nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
+
+### 
+```
+
+This is what we have in the "network" package.
+![image](https://github.com/robric/nephio-testings/assets/21667569/a98a38c8-798f-49a6-b158-041c85473b0b)
+and if we double click on a a given network:
+![image](https://github.com/robric/nephio-testings/assets/21667569/a0b61e41-1b9b-4ccf-bd01-9ac9a802d9cb)
+
+nice... 
+
+```
+ubuntu@ubuntu-vm:~$ kubectl get networks.infra.nephio.org 
+NAME           READY
+vpc-internal   True
+vpc-internet   True
+vpc-ran        True
+ubuntu@ubuntu-vm:~$
+```
