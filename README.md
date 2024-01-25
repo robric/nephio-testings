@@ -421,8 +421,10 @@ resource-group-system          resource-group-controller-manager-6cdfc6486d-hrj7
 
 ### Deploy Edge Clusters
 
+Unlike for the regional clusters, the deployment of edge clusters is all controlled via kubernetes (packagevariant). Let's have a closer look at the deployment.
+
 ```
-### Apply package (porch) via kubernetes. Tt seems to be equivalent to the kpt commands previously seen but in manifests. The content of the file is below.
+### Apply package (porch) via kubernetes. It will be equivalent to the kpt commands previously seen but managed via kubernetes manifests. The content of the file is below.
 
 ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/002-edge-clusters.yaml
 packagevariantset.config.porch.kpt.dev/edge-clusters unchanged
@@ -453,12 +455,12 @@ spec:
             nephio.org/site-type: edge
             nephio.org/region: us-west1
 
-### We see new repos for edge
+### We see new source 
 
 ubuntu@ubuntu-vm:~$ kubectl get repositories.
 NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
 edge01                    git    Package   true         True    http://172.18.0.200:3000/nephio/edge01.git
-edge02                    git    Package   true         True    http://172.18.0.200:3000/nephio/edge02.git
+edge02                    git    Package   true         True    http://172.18.0.200:3000/nephio/edge02.git 
 free5gc-packages          git    Package   false        True    https://github.com/nephio-project/free5gc-packages.git
 mgmt                      git    Package   true         True    http://172.18.0.200:3000/nephio/mgmt.git
 mgmt-staging              git    Package   false        True    http://172.18.0.200:3000/nephio/mgmt-staging.git
