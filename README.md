@@ -28,11 +28,17 @@ sudo NEPHIO_DEBUG=false   \
      NEPHIO_USER=ubuntu   \
      bash
 ```
-Add port redirection to access UI for nephio and gitea:
+Add port redirection on the host that host the VM (10.65.94.183 is the VM IP) to access UI for nephio and gitea:
 ```
 ssh ubuntu@10.65.94.183               -L *:7007:localhost:7007                 -L *:3000:172.18.0.200:3000                 kubectl port-forward --namespace=nephio-webui svc/nephio-webui 7007
 ```
-For some reason, the nephio UI does not work. This is ok for gitea.
+For some reason, the nephio UI does not work (port 7007). 
+But, this is ok for gitea (port 3000).
+After creating an account in gitea, we can access to the gitea repos and see the imported packages. The below capture has been taken during the deployment, hence we have a copy of repos.
+
+![image](https://github.com/robric/nephio-testings/assets/21667569/9e159b06-2c20-4493-a179-d8a31af7ce2f)
+
+The declarative definition of the deployment (infra, pods, NF config) is a a  cornerstone of the nephio vision. It is all exposed via  KRM (Kubernetes Resource Model). Here gitea is a local repo, which stores the data related to the deployment.
 
 ## What you get from there
 
@@ -198,7 +204,7 @@ The idea to have multiple clusters with
 - 2 edge clusters
 
 
-There are few packages already installed.
+There are few packages already installed. 
 
 ```
 ubuntu@ubuntu-vm:~$ kubectl get repositories.config.porch.kpt.dev
@@ -219,7 +225,7 @@ nephio-example-packages   git    Package   false        True    https://github.c
 
 ```
 
-We're having tons of packages there...  These are remote packages (see rpkg in the command) for now that we want to clone locally (gitea).
+We're having tons of packages there...  These are remote packages (see rpkg in the command) that we want to clone locally (gitea).
 
 ```
 ubuntu@ubuntu-vm:~$ kpt alpha rpkg get
@@ -531,8 +537,7 @@ ubuntu@ubuntu-vm:~$ kubectl get repositories.
 NAME                      TYPE   CONTENT   DEPLOYMENT   READY   ADDRESS
 [...]
 nephio-example-packages   git    Package   false        True    https://github.com/nephio-project/nephio-example-packages.git
-
-### 
+###
 ```
 
 This is what we have in the "network" package.
@@ -540,7 +545,11 @@ This is what we have in the "network" package.
 and if we double click on a a given network:
 ![image](https://github.com/robric/nephio-testings/assets/21667569/a0b61e41-1b9b-4ccf-bd01-9ac9a802d9cb)
 
-nice... 
+As expected this all cloned to gitea following the downstream specs of the PackageVariant resource (repo: mgmt / package: network).
+
+![image](https://github.com/robric/nephio-testings/assets/21667569/f767cca9-b767-4959-8495-8762d2897ead)
+
+nice...  so we end up with the corresponding "networks" CRDs instantiated in our cluster. 
 
 ```
 ubuntu@ubuntu-vm:~$ kubectl get networks.infra.nephio.org 
@@ -550,3 +559,5 @@ vpc-internet   True
 vpc-ran        True
 ubuntu@ubuntu-vm:~$
 ```
+
+
