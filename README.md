@@ -560,6 +560,14 @@ vpc-internal   True
 vpc-internet   True
 vpc-ran        True
 ubuntu@ubuntu-vm:~$
+
+ubuntu@ubuntu-vm:~$ kubectl get networkinstances.ipam.resource.nephio.org
+NAME           SYNC   STATUS   NETWORK-INSTANCE   PREFIX0      PREFIX1        PREFIX2      PREFIX3        PREFIX4   AGE
+vpc-internal   True   True     vpc-internal       172:1::/32   172.1.0.0/16                                         4d19h
+vpc-internet   True   True     vpc-internet       172::/32     172.0.0.0/16   1000::/32    10.0.0.0/8               4d19h
+vpc-ran        True   True     vpc-ran            172:2::/32   172.2.0.0/16   172:3::/32   172.3.0.0/16             4d19h
+ubuntu@ubuntu-vm:~$ 
 ```
+
 
 
