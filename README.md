@@ -646,6 +646,8 @@ Here is a recap of the topology as it is deployed:
 
 As reflected in nephio CRDs, we have three distinct vlans for each interface
 
+![image](https://github.com/robric/nephio-testings/assets/21667569/9704e5ab-36f9-476b-8c37-0569492e5c58)
+
 
 ## Deploy Free5GC on the regional site
 
