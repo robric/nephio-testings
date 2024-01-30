@@ -570,10 +570,17 @@ ubuntu@ubuntu-vm:~$
 ```
 
 Finally we execute a script that generates a yaml manifest (003-network-topo.yaml) for the rawtopologies.topo.nephio.org CRD. The script captures the IP address (172.18.0.12) that was  allocated to the leaf router (srlinux).
+This actually does not seem to do anything. Maybe this information is provided to show the vision, if so this should be more explicitely mentionned.
 
 ```
 ubuntu@ubuntu-vm:~$ ./test-infra/e2e/provision/hacks/network-topo.sh
 ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/003-network-topo.yaml
+
+ubuntu@ubuntu-vm:~$ docker inspect  net-free5gc-net-leaf | grep IPA
+[...]
+                    "IPAddress": "172.18.0.12",
+
+### This IP will be pushed the rawtopologies manifest/CRD
 
 ubuntu@ubuntu-vm:~$  kubectl get rawtopologies.topo.nephio.org  -o yaml
 apiVersion: v1
@@ -628,10 +635,14 @@ items:
         address: 172.18.0.12:57400
         provider: srl.nokia.com
 
-ubuntu@ubuntu-vm:~$ docker inspect  net-free5gc-net-leaf | grep IPA
-[...]
-                    "IPAddress": "172.18.0.12",
-ubuntu@ubuntu-vm:~$ 
+```
+Here is a recap of the topology as it is deployed:
+- We have 3 kind clusters, each deployed with a dedicated kubernetes cluster. We have a single worker and this is what is of interest here.
+- We have a centralized router (nokia containerized srlinux) called leaf
+- The kube workers have  an additional interface connected to the router. The interface meshing corresponds with the description in the rawtopologies.topo.nephio.org CRD.
+
+![image](https://github.com/robric/nephio-testings/assets/21667569/3bc25a45-98b8-41a5-8d01-ecc0b0ee0593)
+
 
 #  APPENDIX
 
