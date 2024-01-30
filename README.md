@@ -643,6 +643,84 @@ Here is a recap of the topology as it is deployed:
 
 ![image](https://github.com/robric/nephio-testings/assets/21667569/3bc25a45-98b8-41a5-8d01-ecc0b0ee0593)
 
+As reflected in nephio CRDs, we have three distinct vlans for each interface
+
+
+## Deploy Free5GC on the regional site
+
+Clone  the free5gc package to the regional repository and deploy:
+
+```
+ubuntu@ubuntu-vm:~/free5gc$ kpt alpha rpkg get | grep free5g
+free5gc-packages-148a8446856cfcba9ba53f9c5786bacb835f3733          free5gc-cp                           main               main       false    Published   free5gc-packages
+free5gc-packages-daba5a241a23af3ce777b256c39dcedc3c5e3917          free5gc-cp                           v1                 v1         true     Published   free5gc-packages
+[...]
+
+ntu@ubuntu-vm:~$    kpt alpha rpkg clone -n default  free5gc-packages-daba5a241a23af3ce777b256c39dcedc3c5e3917 free5gc --repository regional
+regional-6d264f6ffe11138112e9f2b3b843c89646a0df42 created
+
+ubuntu@ubuntu-vm:~$
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg propose -n default regional-6d264f6ffe11138112e9f2b3b843c89646a0df42
+regional-6d264f6ffe11138112e9f2b3b843c89646a0df42 proposed
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg approve -n default regional-6d264f6ffe11138112e9f2b3b843c89646a0df42
+regional-6d264f6ffe11138112e9f2b3b843c89646a0df42 approved
+ubuntu@ubuntu-vm:~$ 
+```
+We have successfully cloned the free5gc in the local regional repo. We can check that via the local gitea webUI  (http://10.87.104.36:3000/nephio/regional/src/branch/main/free5gc)
+![image](https://github.com/robric/nephio-testings/assets/21667569/d3ac963a-569e-4431-84af-d7e52e24353d)
+
+Then we see all the corresponding resources created the free5gc namespace (free5gc is name of the target package for "kpt alpha clone" command). 
+
+```
+ubuntu@ubuntu-vm:~/regional$ kubectl get ns --context regional-admin@regional free5gc 
+NAME      STATUS   AGE
+free5gc   Active   2m11s
+ubuntu@ubuntu-vm:~/regional$
+
+ubuntu@ubuntu-vm:~$ kubectl get all -n free5gc    --context regional-admin@regional
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/free5gc-ausf-7d494d668d-p6pzw    1/1     Running   0          20m
+pod/free5gc-nrf-66cc98cfc5-kjnfm     1/1     Running   0          20m
+pod/free5gc-nssf-668db85d54-bxnlx    1/1     Running   0          20m
+pod/free5gc-pcf-55d4bfd648-cqsq8     1/1     Running   0          20m
+pod/free5gc-udm-845db6c9c8-ntmgv     1/1     Running   0          20m
+pod/free5gc-udr-79466f7f86-rs556     1/1     Running   0          20m
+pod/free5gc-webui-84ff8c456c-v84ft   1/1     Running   0          20m
+pod/mongodb-0                        1/1     Running   0          20m
+
+NAME                    TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+service/ausf-nausf      ClusterIP   10.136.73.176    <none>        80/TCP           20m
+service/mongodb         ClusterIP   10.131.217.111   <none>        27017/TCP        20m
+service/nrf-nnrf        ClusterIP   10.139.184.118   <none>        8000/TCP         20m
+service/nssf-nnssf      ClusterIP   10.143.248.107   <none>        80/TCP           20m
+service/pcf-npcf        ClusterIP   10.143.164.18    <none>        80/TCP           20m
+service/udm-nudm        ClusterIP   10.131.73.175    <none>        80/TCP           20m
+service/udr-nudr        ClusterIP   10.140.155.175   <none>        80/TCP           20m
+service/webui-service   NodePort    10.129.87.12     <none>        5000:30500/TCP   20m
+
+NAME                            READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/free5gc-ausf    1/1     1            1           20m
+deployment.apps/free5gc-nrf     1/1     1            1           20m
+deployment.apps/free5gc-nssf    1/1     1            1           20m
+deployment.apps/free5gc-pcf     1/1     1            1           20m
+deployment.apps/free5gc-udm     1/1     1            1           20m
+deployment.apps/free5gc-udr     1/1     1            1           20m
+deployment.apps/free5gc-webui   1/1     1            1           20m
+
+NAME                                       DESIRED   CURRENT   READY   AGE
+replicaset.apps/free5gc-ausf-7d494d668d    1         1         1       20m
+replicaset.apps/free5gc-nrf-66cc98cfc5     1         1         1       20m
+replicaset.apps/free5gc-nssf-668db85d54    1         1         1       20m
+replicaset.apps/free5gc-pcf-55d4bfd648     1         1         1       20m
+replicaset.apps/free5gc-udm-845db6c9c8     1         1         1       20m
+replicaset.apps/free5gc-udr-79466f7f86     1         1         1       20m
+replicaset.apps/free5gc-webui-84ff8c456c   1         1         1       20m
+
+NAME                       READY   AGE
+statefulset.apps/mongodb   1/1     20m
+```
+
+
 
 #  APPENDIX
 
