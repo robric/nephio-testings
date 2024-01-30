@@ -36,7 +36,8 @@ For some reason, the nephio UI does not work (port 7007).
 But, this is ok for gitea (port 3000).
 After creating an account in gitea, we can access to the gitea repos and see the imported packages. The below capture has been taken during the deployment, hence we already can see a copy of repos (regional, edge etc.) which control the deployment of workloads running in each cluster. 
 
-![image](https://github.com/robric/nephio-testings/assets/21667569/f01f83ae-1c33-466c-a667-18f27e0fb380)
+![image](https://github.com/robric/nephio-testings/assets/21667569/1e7502f6-b986-45ce-a715-560154f1da7d)
+
 
 The declarative definition of the deployment (infra, pods, NF config) is a a  cornerstone of the nephio vision. It is all exposed via  KRM (Kubernetes Resource Model). Here gitea is a local repo, which stores the data related to the deployment.
 
