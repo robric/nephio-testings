@@ -493,7 +493,7 @@ kubectl get secret edge02-kubeconfig -o jsonpath='{.data.value}' | base64 -d > $
 export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/regional-kubeconfig:$HOME/.kube/edge01-kubeconfig:$HOME/.kube/edge02-kubeconfig
 echo "export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/regional-kubeconfig:$HOME/.kube/edge01-kubeconfig:$HOME/.kube/edge02-kubeconfig" >> ~/.bashrc
 ```
-Then configure networking to interconnect regional and edges via 3 vlans (2,3,4). No IP address is defined here, since this will be pushed via nephio.
+Then configure networking to interconnect regional and edges via 3 vlans (2,3,4).
 ```
 ./test-infra/e2e/provision/hacks/inter-connect_workers.sh
 ./test-infra/e2e/provision/hacks/vlan-interfaces.sh
@@ -568,6 +568,346 @@ vpc-internet   True   True     vpc-internet       172::/32     172.0.0.0/16   10
 vpc-ran        True   True     vpc-ran            172:2::/32   172.2.0.0/16   172:3::/32   172.3.0.0/16             4d19h
 ubuntu@ubuntu-vm:~$ 
 ```
+
+Finally we execute a script that generates a yaml manifest (003-network-topo.yaml) for the rawtopologies.topo.nephio.org CRD. The script captures the IP address (172.18.0.12) that was  allocated to the leaf router (srlinux).
+
+```
+ubuntu@ubuntu-vm:~$ ./test-infra/e2e/provision/hacks/network-topo.sh
+ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/003-network-topo.yaml
+
+ubuntu@ubuntu-vm:~$  kubectl get rawtopologies.topo.nephio.org  -o yaml
+apiVersion: v1
+items:
+- apiVersion: topo.nephio.org/v1alpha1
+  kind: RawTopology
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"topo.nephio.org/v1alpha1","kind":"RawTopology","metadata":{"annotations":{},"name":"nephio","namespace":"default"},"spec":{"links":[{"endpoints":[{"interfaceName":"e1-1","nodeName":"srl"},{"interfaceName":"eth1","nodeName":"edge01"}]},{"endpoints":[{"interfaceName":"e1-2","nodeName":"srl"},{"interfaceName":"eth1","nodeName":"edge02"}]},{"endpoints":[{"interfaceName":"e1-3","nodeName":"srl"},{"interfaceName":"eth1","nodeName":"regional"}]}],"nodes":{"edge01":{"labels":{"nephio.org/cluster-name":"edge01"},"provider":"docker.io"},"edge02":{"labels":{"nephio.org/cluster-name":"edge02"},"provider":"docker.io"},"mgmt":{"provider":"docker.io"},"regional":{"labels":{"nephio.org/cluster-name":"regional"},"provider":"docker.io"},"srl":{"address":"172.18.0.12:57400","provider":"srl.nokia.com"}}}}
+    creationTimestamp: "2024-01-26T16:54:18Z"
+    finalizers:
+    - vlan.nephio.org/finalizer
+    generation: 1
+    name: nephio
+    namespace: default
+    resourceVersion: "9497089"
+    uid: 29219b5e-4fcf-483a-bc24-9d86ee24365e
+  spec:
+    links:
+    - endpoints:
+      - interfaceName: e1-1
+        nodeName: srl
+      - interfaceName: eth1
+        nodeName: edge01
+    - endpoints:
+      - interfaceName: e1-2
+        nodeName: srl
+      - interfaceName: eth1
+        nodeName: edge02
+    - endpoints:
+      - interfaceName: e1-3
+        nodeName: srl
+      - interfaceName: eth1
+        nodeName: regional
+    nodes:
+      edge01:
+        labels:
+          nephio.org/cluster-name: edge01
+        provider: docker.io
+      edge02:
+        labels:
+          nephio.org/cluster-name: edge02
+        provider: docker.io
+      mgmt:
+        provider: docker.io
+      regional:
+        labels:
+          nephio.org/cluster-name: regional
+        provider: docker.io
+      srl:
+        address: 172.18.0.12:57400
+        provider: srl.nokia.com
+
+ubuntu@ubuntu-vm:~$ docker inspect  net-free5gc-net-leaf | grep IPA
+[...]
+                    "IPAddress": "172.18.0.12",
+ubuntu@ubuntu-vm:~$ 
+
+#  APPENDIX
+
+## SR LINUX CLI and outputs
+
+```
+### Find the srlinux router container
+
+ubuntu@ubuntu-vm:~$ docker ps | grep srl
+fa84deab86bd   ghcr.io/nokia/srlinux:22.11.2-116   "/tini -- fixuid -q …"   5 days ago    Up 5 days                                           net-free5gc-net-leaf
+
+### Connect to it via docker
+
+ubuntu@ubuntu-vm:~$ sudo docker exec -it      net-free5gc-net-leaf  sh
+sh-4.4# sr_cli
+Using configuration file(s): []
+Welcome to the srlinux CLI.
+Type 'help' (and press <ENTER>) if you need any help using this.
+--{ + running }--[  ]--
+A:leaf#
+
+### Run commands
+
+A:leaf# show network-instance route-table  
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 unicast route table of network instance mgmt
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+|           Prefix            |  ID   | Route Type |     Route Owner      |        Active        |  Metric  |  Pref   | Next-hop (Type)  |     Next-hop     |
+|                             |       |            |                      |                      |          |         |                  |    Interface     |
++=============================+=======+============+======================+======================+==========+=========+==================+==================+
+| 0.0.0.0/0                   | 1     | dhcp       | dhcp_client_mgr      | True                 | 0        | 5       | 172.18.0.1       | mgmt0.0          |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.18.0.0/16               | 0     | linux      | linux_mgr            | False                | 0        | 5       | 172.18.0.0       | mgmt0.0          |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.18.0.0/16               | 1     | local      | net_inst_mgr         | True                 | 0        | 0       | 172.18.0.12      | mgmt0.0          |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.18.0.12/32              | 1     | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.18.255.255/32           | 1     | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 routes total                    : 5
+IPv4 prefixes with active routes     : 4
+IPv4 prefixes with active ECMP routes: 0
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 unicast route table of network instance vpc-internal
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+|           Prefix            |  ID   | Route Type |     Route Owner      |        Active        |  Metric  |  Pref   | Next-hop (Type)  |     Next-hop     |
+|                             |       |            |                      |                      |          |         |                  |    Interface     |
++=============================+=======+============+======================+======================+==========+=========+==================+==================+
+| 172.1.0.0/24                | 3     | local      | net_inst_mgr         | True                 | 0        | 0       | 172.1.0.1        | irb0.2372        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.1.0.1/32                | 3     | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.1.0.255/32              | 3     | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.1.1.0/24                | 17    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.1.1.1        | irb0.2026        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.1.1.1/32                | 17    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.1.1.255/32              | 17    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.1.2.0/24                | 16    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.1.2.1        | irb0.2025        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.1.2.1/32                | 16    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.1.2.255/32              | 16    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 routes total                    : 9
+IPv4 prefixes with active routes     : 9
+IPv4 prefixes with active ECMP routes: 0
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 unicast route table of network instance vpc-internet
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+|           Prefix            |  ID   | Route Type |     Route Owner      |        Active        |  Metric  |  Pref   | Next-hop (Type)  |     Next-hop     |
+|                             |       |            |                      |                      |          |         |                  |    Interface     |
++=============================+=======+============+======================+======================+==========+=========+==================+==================+
+| 172.0.0.0/24                | 7     | local      | net_inst_mgr         | True                 | 0        | 0       | 172.0.0.1        | irb0.2384        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.0.0.1/32                | 7     | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.0.0.255/32              | 7     | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.0.1.0/24                | 6     | local      | net_inst_mgr         | True                 | 0        | 0       | 172.0.1.1        | irb0.2038        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.0.1.1/32                | 6     | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.0.1.255/32              | 6     | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.0.2.0/24                | 19    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.0.2.1        | irb0.2037        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.0.2.1/32                | 19    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.0.2.255/32              | 19    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 routes total                    : 9
+IPv4 prefixes with active routes     : 9
+IPv4 prefixes with active ECMP routes: 0
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+IPv4 unicast route table of network instance vpc-ran
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+|           Prefix            |  ID   | Route Type |     Route Owner      |        Active        |  Metric  |  Pref   | Next-hop (Type)  |     Next-hop     |
+|                             |       |            |                      |                      |          |         |                  |    Interface     |
++=============================+=======+============+======================+======================+==========+=========+==================+==================+
+| 172.2.0.0/24                | 12    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.2.0.1        | irb0.1486        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.2.0.1/32                | 12    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.2.0.255/32              | 12    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.2.1.0/24                | 11    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.2.1.1        | irb0.1485        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.2.1.1/32                | 11    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.2.1.255/32              | 11    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.2.2.0/24                | 13    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.2.2.1        | irb0.1832        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.2.2.1/32                | 13    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.2.2.255/32              | 13    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.3.0.0/24                | 12    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.3.0.1        | irb0.1486        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.3.0.1/32                | 12    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.3.0.255/32              | 12    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.3.1.0/24                | 11    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.3.1.1        | irb0.1485        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.3.1.1/32                | 11    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.3.1.255/32              | 11    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
+| 172.3.2.0/24                | 13    | local      | net_inst_mgr         | True                 | 0        | 0       | 172.3.2.1        | irb0.1832        |
+|                             |       |            |                      |                      |          |         | (direct)         |                  |
+| 172.3.2.1/32                | 13    | host       | net_inst_mgr         | True                 | 0        | 0       | None (extract)   | None             |
+| 172.3.2.255/32              | 13    | host       | net_inst_mgr         | True                 | 0        | 0       | None (broadcast) |                  |
++-----------------------------+-------+------------+----------------------+----------------------+----------+---------+------------------+------------------+
+--------------------------------------------------------------------------------------------------------
+[....]
+
+
+A:leaf# show interface  
+==================================================================================================================================================================================
+ethernet-1/1 is up, speed 10G, type None
+  ethernet-1/1.2 is up
+    Network-instance: vpc-ran-edge01-bd
+    Encapsulation   : vlan-id 2
+    Type            : bridged
+  ethernet-1/1.3 is up
+    Network-instance: vpc-internal-edge01-bd
+    Encapsulation   : vlan-id 3
+    Type            : bridged
+  ethernet-1/1.4 is up
+    Network-instance: vpc-internet-edge01-bd
+    Encapsulation   : vlan-id 4
+    Type            : bridged
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ethernet-1/2 is up, speed 10G, type None
+  ethernet-1/2.2 is up
+    Network-instance: vpc-internet-edge02-bd
+    Encapsulation   : vlan-id 2
+    Type            : bridged
+  ethernet-1/2.3 is up
+    Network-instance: vpc-ran-edge02-bd
+    Encapsulation   : vlan-id 3
+    Type            : bridged
+  ethernet-1/2.4 is up
+    Network-instance: vpc-internal-edge02-bd
+    Encapsulation   : vlan-id 4
+    Type            : bridged
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ethernet-1/3 is up, speed 100G, type None
+  ethernet-1/3.2 is up
+    Network-instance: vpc-internal-regional-bd
+    Encapsulation   : vlan-id 2
+    Type            : bridged
+  ethernet-1/3.3 is up
+    Network-instance: vpc-internet-regional-bd
+    Encapsulation   : vlan-id 3
+    Type            : bridged
+  ethernet-1/3.4 is up
+    Network-instance: vpc-ran-regional-bd
+    Encapsulation   : vlan-id 4
+    Type            : bridged
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+irb0 is up, speed None, type None
+  irb0.1485 is up
+    Network-instance: vpc-ran, vpc-ran-edge01-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.2.1.1/24 (static, preferred, primary, anycast)
+    IPv4 addr    : 172.3.1.1/24 (static, preferred, anycast)
+    IPv6 addr    : 172:2:0:1::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:3:0:1::1/64 (static, preferred, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.1486 is up
+    Network-instance: vpc-ran, vpc-ran-edge02-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.2.0.1/24 (static, preferred, primary, anycast)
+    IPv4 addr    : 172.3.0.1/24 (static, preferred, anycast)
+    IPv6 addr    : 172:2::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:3::1/64 (static, preferred, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.1832 is up
+    Network-instance: vpc-ran, vpc-ran-regional-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.2.2.1/24 (static, preferred, primary, anycast)
+    IPv4 addr    : 172.3.2.1/24 (static, preferred, anycast)
+    IPv6 addr    : 172:2:0:2::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:3:0:2::1/64 (static, preferred, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2025 is up
+    Network-instance: vpc-internal, vpc-internal-edge01-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.1.2.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:1:0:2::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2026 is up
+    Network-instance: vpc-internal, vpc-internal-edge02-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.1.1.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:1:0:1::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2037 is up
+    Network-instance: vpc-internet, vpc-internet-edge01-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.0.2.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:0:0:2::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2038 is up
+    Network-instance: vpc-internet, vpc-internet-edge02-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.0.1.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:0:0:1::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2372 is up
+    Network-instance: vpc-internal, vpc-internal-regional-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.1.0.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172:1::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+  irb0.2384 is up
+    Network-instance: vpc-internet, vpc-internet-regional-bd
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.0.0.1/24 (static, preferred, primary, anycast)
+    IPv6 addr    : 172::1/64 (static, preferred, primary, anycast)
+    IPv6 addr    : fe80::200:5eff:fe00:101/64 (link-layer, preferred, anycast)
+    IPv6 addr    : fe80::1868:2ff:feff:41/64 (link-layer, preferred)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+mgmt0 is up, speed 1G, type None
+  mgmt0.0 is up
+    Network-instance: mgmt
+    Encapsulation   : null
+    Type            : None
+    IPv4 addr    : 172.18.0.12/16 (dhcp, preferred)
+    IPv6 addr    : fc00:f853:ccd:e793::c/64 (dhcp, preferred)
+    IPv6 addr    : fe80::42:acff:fe12:c/64 (link-layer, preferred)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+==================================================================================================================================================================================
+Summary
+  0 loopback interfaces configured
+  4 ethernet interfaces are up
+  1 management interfaces are up
+  19 subinterfaces are up
+==================================================================================================================================================================================
+--{ + running }--[  ]--
+A:leaf#
+```
+
+
 
 
 
