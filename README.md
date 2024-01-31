@@ -243,17 +243,15 @@ nephio-example-packages-05707c7acfb59988daaefd85e3f5c299504c2da1   nephio-worklo
 nephio-example-packages-48cea934a3bd876b775099ab59e7c12456888ffd   nephio-workload-cluster   v9              v9         true     Published   nephio-example-packages
 ...
 ```
-
-So we clone the remote package 
+We can clone and pull the remote package:
+-  kpt alpha rpkg clone: clone of a package from a repo to a target repository
+-  kpt alpha rpkg pull: makes a local copy on the package locally 
 ```
 ubuntu@ubuntu-vm:~$ kpt alpha rpkg clone -n default nephio-example-packages-48cea934a3bd876b775099ab59e7c12456888ffd --repository mgmt regional
 mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 created
-ubuntu@ubuntu-vm:~$
-
-kpt alpha rpkg pull -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 regional
+ubuntu@ubuntu-vm:~$ kpt alpha rpkg pull -n default mgmt-08c26219f9879acdefed3469f8c3cf89d5db3868 regional
 ```
-
-And we get a new cloned directory of the remote package.
+So we have a new local  directory of the remote package (this is the effect of the kpt alpha rpkg pull  command)
 
 ```
 ubuntu@ubuntu-vm:~$ ls
@@ -275,15 +273,6 @@ total 52
 -rw-r--r-- 1 ubuntu ubuntu 654 Jan  9 10:10 pv-vlanindex.yaml
 -rw-r--r-- 1 ubuntu ubuntu 405 Jan  9 10:10 workload-cluster.yaml
 ubuntu@ubuntu-vm:~/regional$
-
-ubuntu@ubuntu-vm:~/regional$ cat README.md 
-# nephio-workload-cluster
-
-## Description
-
-Deploying this package to the Nephio management cluster will result in the
-provisioning of a workload cluster, associated repository, tokens, secrets,
-and other resources needed to fully register the new cluster with Nephio.
 ```
 
 Use the set-label function against the package.
@@ -722,7 +711,57 @@ replicaset.apps/free5gc-webui-84ff8c456c   1         1         1       20m
 NAME                       READY   AGE
 statefulset.apps/mongodb   1/1     20m
 ```
+Now we deploy the free5gc operator to finalize the deployment.
+```
 
+### This is controlled via a package variange. 
+
+ubuntu@ubuntu-vm:~$ cat test-infra/e2e/tests/004-free5gc-operator.yaml 
+apiVersion: config.porch.kpt.dev/v1alpha2
+kind: PackageVariantSet
+metadata:
+  name: free5gc-operator
+spec:
+  upstream:
+    repo: free5gc-packages
+    package: free5gc-operator
+    revision: v5
+  targets:
+  - objectSelector:
+      apiVersion: infra.nephio.org/v1alpha1
+      kind: WorkloadCluster
+    template:
+      annotations:
+        approval.nephio.org/policy: initial
+ubuntu@ubuntu-vm:~$
+
+### Here the target for operator is the workloadclusters
+
+ubuntu@ubuntu-vm:~$ kubectl get workloadclusters.infra.nephio.org 
+NAME       AGE
+edge01     6d17h
+edge02     6d17h
+regional   6d17h
+```
+
+This copies the package to the "regional" and "edge0x" repositories:
+![image](https://github.com/robric/nephio-testings/assets/21667569/2299be3e-9660-4b14-86f3-281bc04c93e0)
+![image](https://github.com/robric/nephio-testings/assets/21667569/e6e2e1bb-d03d-4ecc-b4ec-34e78d8b01a8)
+
+The operator is deployed in edge clusters (but actually not in the regional)
+
+```
+ubuntu@ubuntu-vm:~$ kubectl -n free5gc get all --context edge01-admin@edge01 
+NAME                                    READY   STATUS    RESTARTS   AGE
+pod/free5gc-operator-79bd5b6f7d-2qrsv   2/2     Running   0          23m
+
+NAME                               READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/free5gc-operator   1/1     1            1           23m
+
+NAME                                          DESIRED   CURRENT   READY   AGE
+replicaset.apps/free5gc-operator-79bd5b6f7d   1         1         1       23m
+ubuntu@ubuntu-vm:~$
+```
 
 
 #  APPENDIX
