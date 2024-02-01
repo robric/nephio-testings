@@ -748,7 +748,7 @@ This copies the package to the "regional" and "edge0x" repositories:
 ![image](https://github.com/robric/nephio-testings/assets/21667569/2299be3e-9660-4b14-86f3-281bc04c93e0)
 ![image](https://github.com/robric/nephio-testings/assets/21667569/e6e2e1bb-d03d-4ecc-b4ec-34e78d8b01a8)
 
-The operator is deployed in edge clusters (but actually not in the regional)
+The operator is deployed in edge clusters (but actually not in the regional - I couldn't not find out why -).
 
 ```
 ubuntu@ubuntu-vm:~$ kubectl -n free5gc get all --context edge01-admin@edge01 
@@ -763,6 +763,42 @@ replicaset.apps/free5gc-operator-79bd5b6f7d   1         1         1       23m
 ubuntu@ubuntu-vm:~$
 ```
 
+Then deploy:
+- UPF at Edge
+- SMF and AMF in regional
+
+Cluster selection is based on labels that were defined during workloadcluster creation
+
+```
+ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/005-edge-free5gc-upf.yaml
+ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/006-regional-free5gc-amf.yaml
+ubuntu@ubuntu-vm:~$ kubectl apply -f test-infra/e2e/tests/006-regional-free5gc-smf.yaml
+
+ubuntu@ubuntu-vm:~$ cat test-infra/e2e/tests/006-regional-free5gc-amf.yaml
+apiVersion: config.porch.kpt.dev/v1alpha2
+kind: PackageVariantSet
+[....]
+  targets:
+  - objectSelector:
+      apiVersion: infra.nephio.org/v1alpha1
+      kind: WorkloadCluster
+      matchLabels:
+        nephio.org/site-type: regional  <------------------------------------  LABEL 
+
+ubuntu@ubuntu-vm:~$ cat regional/workload-cluster.yaml 
+apiVersion: infra.nephio.org/v1alpha1
+kind: WorkloadCluster
+[...]
+  labels:
+    nephio.org/site-type: regional   <------------------------------------  LABEL 
+
+
+ubuntu@ubuntu-vm:~$ kubectl get pods -n free5gc-upf -l name=upf-edge01 --context edge01-admin@edge01 
+NAME                          READY   STATUS    RESTARTS   AGE
+upf-edge01-6dcbb7b77d-mbzsr   1/1     Running   0          13m
+ubuntu@ubuntu-vm:~$
+
+```
 
 #  APPENDIX
 
